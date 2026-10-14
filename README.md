@@ -10,10 +10,12 @@ studies. This repository is what happened when the second was pointed at the fir
 
 **The question:** using only what is known at entry, can a model size mogul's daily entries better than one unit each?
 
-**The answer: no ML sizing is adopted.** Inside mogul's VIX gate, a ridge regression with stable, economically sensible
-signs learns which entries will be stopped, and beats constant size by about half a Sharpe point. But the gain holds in
-only 4 of 7 test years, the in-sample fit far exceeds the out-of-sample fit, and about 225 books were evaluated in the
-search that found it. What chairlift added is mostly confirmation of what mogul had found by hand.
+**The answer: no ML sizing is adopted, and the question is closed.** Inside mogul's VIX gate, a ridge regression with
+stable, economically sensible signs learns which entries will be stopped, and beats constant size by about half a
+Sharpe point on the design window. But the gain holds in only 4 of 7 test years, the in-sample fit far exceeds the
+out-of-sample fit, and, deflated at the honest count of books searched, it cannot be told from luck. Registered before
+any new data and judged once on 2024-01 to 2026-09, it **failed**: −0.21 [−0.92, +0.40] against constant size. What
+chairlift added is mostly confirmation of what mogul had found by hand.
 
 ## The card (test years 2017–2023, daily-marked on every trading day, 1× costs)
 
@@ -25,6 +27,35 @@ search that found it. What chairlift added is mostly confirmation of what mogul 
 
 The gain is a paired Sharpe difference on the same days, with a 21-day moving-block bootstrap (the same blocks for
 both books). `ml_results.ipynb` reproduces every number here from the derived series in `data/`.
+
+## The one holdout look (2024-01 to 2026-09)
+
+The gated call-wing ridge was registered before any new data was read:
+- the model and the sizing rule, unchanged from the design window
+- the metric: the paired Sharpe difference over constant size
+- three gates: G1, the gain is positive (the kill); G2, it keeps at least half of the design-window gain; G3, its
+  drawdown is no deeper than twice the design window's
+
+A power analysis showed beforehand that the look could kill the candidate but not confirm it. Then it was judged once:
+
+| 678 trading days, 2024-01-02 to 2026-09-16 | design window (2017–2023) | holdout |
+|---|---|---|
+| gain over constant size [99% CI] | +0.64 [+0.15, +1.18] | **−0.21 [−0.92, +0.40]** |
+| ridge-sized / constant Sharpe | 2.36 / 1.72 | 1.59 / 1.81 |
+| gates | | G1 fails, G2 fails, G3 holds |
+
+**Why it failed:** the ridge sized up into the August 2024 shock. The seven gated entries stopped on 2 August carried
+1.57 units on average, because a calm quarter and a dip in the S&P 500 read as reasons for more size. From 15 July to 15 August the ridge-sized book lost $88,944 against $58,783 at constant size.
+The constant book held up over the whole window, so the premium travelled and the sizing did not.
+
+**Before the look, the design window was re-judged at the honest count.**
+- The study was re-run on chairlift 0.3.0, which records every judged book.
+- 171 books in all, 92 of them sizing books judged on their gain over constant size.
+- The candidate ranked 2nd of the 92.
+- Its deflated probability of beating the best of that many lucky books was 0.72–0.91, below the 0.95 bar, depending
+  on how the overlap of month-long positions is counted.
+
+`ml_results.ipynb` (section 5) recomputes the verdict from `data/holdout_books.parquet`.
 
 ## The baseline
 
@@ -110,12 +141,13 @@ flowchart LR
    once that picking the best trade setting is overfitting, while the ridge penalty is not.
 4. **Cheap iteration.** Seventeen framings in one evening, each costing only its new stages.
 
-**Where it fell short, for this kind of book:**
+**Where it fell short, for this kind of book** (each gap below is fixed in chairlift 0.3.0, and the study was re-run on
+it before the holdout look; the re-run reproduced every design-window number to within 2e-15):
 1. **No native book for overlapping, path-marked entries.** The sizing books are client stages.
 2. **The fit stage throws the fitted model away.** Each fold's coefficients and importances are computed and dropped;
    this review recovered them with a side script.
-3. **The ledger counts one headline per run, not every book.** It shows 32 headlined trials; the honest count is about
-   225 books.
+3. **The ledger counts one headline per run, not every book.** It showed 32 headlined trials; the mechanical count on
+   0.3.0 is 171 judged books, 92 of them sizing books.
 4. **The deflated Sharpe tests the wrong question here.** It asks whether the best book beats zero, which a real
    premium makes trivially true. The decision question is the gain over constant size, which the client measures with
    paired confidence intervals.
@@ -134,10 +166,11 @@ flowchart LR
 | Learning the position directly beats predict-then-size | 1.77–1.93 gated, 0.71 without the gate | no |
 | Positioning the structure leg by leg helps | through the call wing alone | yes, the same signal |
 | A search over the trade's settings finds a better trade | it finds the family, not a cell | the family only |
+| The registered candidate holds on data it has not seen | −0.21 [−0.92, +0.40] over 2024-01 to 2026-09 | no |
 
-**Recommendation:** keep mogul's economics (the gate, the call-heavy structure, the stop, smaller size in persistent
-vol-of-vol). If one ML candidate is carried forward, register the gated call-wing ridge as a sizing overlay and judge it
-once, on its gain over constant size, on data it has not seen.
+**Outcome:** keep mogul's economics (the gate, the call-heavy structure, the stop) at one unit per entry. The one ML
+candidate was registered as a sizing overlay and judged once on unseen data, as recommended, and failed. ML sizing for
+mogul is closed as a documented negative.
 
 ## Private repository structure
 
@@ -149,7 +182,8 @@ mogul_ml_trade_private/
 │   ├── study.py             # the client: sources, panel, models, sizing books, policy, dynamic structure
 │   ├── experiments/         # 19 run and search configurations
 │   ├── REVIEW.md            # the review of the model and of the pipeline
-│   ├── review/              # fold-model export, review notebook, public notebook builder
+│   ├── look/                # the registration, the power of the look, the look and its result
+│   ├── review/              # fold-model export, review notebooks (the re-judgement at the honest count), public builder
 │   └── tests/
 ├── engine.py                # mogul's engine (the client imports it; there is no second engine)
 ├── PROTOCOL.md RESEARCH_PLAN.md HYPOTHESIS.md FINDINGS.md   # mogul's reviewed research
@@ -159,5 +193,5 @@ mogul_ml_trade_private/
 ```
 
 *Nothing here is investment advice. `ml_results.ipynb` reproduces every figure from the small derived series in
-`data/`: daily book P&L, per-entry predictions and outcomes, and the fitted models' coefficients. No market data is
-included.*
+`data/`: daily book P&L (the design window and the one holdout look), per-entry predictions and outcomes, and the fitted
+models' coefficients. No market data is included.*
